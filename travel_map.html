@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>旅行足迹地图</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root{color-scheme:light;--ink:#172033;--muted:#64748b;--line:#dbe3ee;--paper:#f8fafc;--panel:#ffffff;--accent:#0f9f8f;--accent-dark:#08766b;--warm:#f97316}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif;background:var(--paper);color:var(--ink)}
+    header{padding:16px 22px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.92);backdrop-filter:blur(10px)}
+    h1{margin:0;font-size:22px;letter-spacing:0;font-weight:750}
+    p{margin:6px 0 0;color:var(--muted);font-size:13px}
+    main{display:grid;grid-template-columns:330px 1fr;gap:14px;padding:14px;height:calc(100vh - 78px)}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:auto;box-shadow:0 8px 28px rgba(15,23,42,.08)}
+    .panel h2{position:sticky;top:0;z-index:2;margin:0;padding:13px 14px;font-size:15px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.96)}
+    ul{list-style:none;margin:0;padding:8px}
+    li{padding:9px 10px;margin:6px 0;border-left:3px solid var(--accent);background:#f8fafc;border-radius:7px;cursor:pointer;transition:background .16s ease,transform .16s ease}
+    li:hover{background:#eef6f5;transform:translateX(2px)}
+    .date{display:inline-block;margin-bottom:4px;padding:1px 6px;border-radius:999px;background:#e6f6f4;color:var(--accent-dark);font-size:12px;font-weight:700}
+    .city{font-weight:700}.meta{font-size:12px;color:var(--muted)}
+    #map{border-radius:8px;border:1px solid var(--line);height:100%;box-shadow:0 8px 28px rgba(15,23,42,.08)}
+    .leaflet-container{font-family:"PingFang SC","Microsoft YaHei",Arial,sans-serif;background:#eef3f2}
+    .leaflet-popup-content-wrapper{border-radius:8px;box-shadow:0 12px 28px rgba(15,23,42,.18)}
+    .leaflet-popup-content{margin:10px 12px;line-height:1.5}
+    .travel-marker{display:flex;align-items:center;gap:4px;width:max-content;transform:translate(-7px,-15px)}
+    .travel-marker .dot{width:12px;height:12px;border:2px solid #fff;border-radius:50%;background:var(--marker-color,var(--accent));box-shadow:0 1px 5px rgba(8,118,107,.45)}
+    .travel-marker .label{display:grid;gap:1px;line-height:1.05;white-space:nowrap;text-shadow:0 1px 0 #fff,1px 0 0 #fff,0 -1px 0 #fff,-1px 0 0 #fff,0 2px 5px rgba(15,23,42,.24)}
+    .travel-marker .city-label{color:#173a34;font-size:11px;font-weight:850}
+    .travel-marker .date-label{color:#49685f;font-size:9px;font-weight:750}
+    @media (max-width:900px){main{grid-template-columns:1fr;grid-template-rows:46vh 1fr;height:auto;padding:10px}#map{min-height:420px}header{padding:14px 16px}}
+  </style>
+</head>
+<body>
+<header>
+  <h1>我的旅行足迹地图</h1>
+  <p>点击左侧城市，地图会定位到对应地点；地图标记旁显示去过的时间。</p>
+</header>
+<main>
+  <section class="panel"><h2>时间线</h2><ul id="timeline"></ul></section>
+  <section><div id="map"></div></section>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const trips = [
+["中国","福建","漳州","-",24.513,117.647],["中国","福建","厦门","-",24.4798,118.0894],["中国","广东","深圳","2013",22.5431,114.0579],["中国","福建","泉州","2016",24.8741,118.6757],["中国","福建","南平","2017",26.6418,118.1785],["中国","福建","龙岩","2017",25.0741,117.0173],["中国","广东","广州","2018",23.1291,113.2644],["中国","广东","潮州","2018",23.6567,116.6226],["中国","江苏","南京","2018",32.0603,118.7969],["中国","香港","香港","2019.2",22.3193,114.1694],["中国","浙江","杭州","2019.6",30.2741,120.1551],["中国","上海","上海","2020.5",31.2304,121.4737],["中国","湖南","长沙","2020.10",28.2282,112.9388],["中国","广东","佛山","2021.1",23.0215,113.1214],["中国","广东","汕头","2021.4",23.3535,116.6822],["中国","广西","南宁","2021.10",22.8170,108.3669],["中国","重庆","重庆","2022.5",29.5630,106.5516],["中国","湖北","武汉","2023.5",30.5928,114.3055],["中国","四川","成都","2023.5",30.5728,104.0668],["中国","云南","大理","2023.5",25.6065,100.2676],["中国","福建","福州","2023.10",26.0745,119.2965],["中国","江苏","苏州","2024.2",31.2989,120.5853],["中国","安徽","黄山","2024.4",29.7147,118.3376],["中国","江西","南昌","2024.5",28.6829,115.8582],["中国","江西","景德镇","2024.5",29.2926,117.1784],["日本","东京都","东京","2024.10",35.6762,139.6503],["日本","神奈川县","镰仓","2024.10",35.3192,139.5467],["日本","京都府","京都","2024.10",35.0116,135.7681],["日本","大阪府","大阪","2024.10",34.6937,135.5023],["日本","兵库县","姬路","2024.10",34.8151,134.6853],["印尼","雅加达特区","雅加达","2024.11",-6.2088,106.8456],["印尼","东爪哇","泗水","2024.11",-7.2575,112.7521],["印尼","巴厘","巴厘","2024.11",-8.4095,115.1889],["印尼","日惹特区","日惹","2024.11",-7.7956,110.3695],["中国","河南","洛阳","2025.2",34.6197,112.4540],["中国","北京","北京","2025.3",39.9042,116.4074],["日本","山梨县","河口湖","2025.4",35.5170,138.7518],["中国","贵州","贵阳","2025.5",26.6470,106.6302],["中国","贵州","安顺","2025.5",26.2455,105.9322],["中国","贵州","黔南","2025.5",26.2582,107.5172],["中国","陕西","西安","2025.5",34.3416,108.9398],["中国","青海","海东","2025.5",36.5029,102.1033],["中国","青海","格尔木","2025.5",36.4012,94.9038],["中国","青海","海西","2025.5",37.3721,97.3426],["中国","甘肃","敦煌","2025.5",40.1421,94.6619],["中国","新疆","吐鲁番","2025.5",42.9513,89.1895],["中国","新疆","伊犁","2025.5",43.9168,81.3242],["中国","新疆","博尔塔拉","2025.5",44.9060,82.0748],["中国","新疆","巴音郭楞","2025.6",41.7686,86.1453],["中国","新疆","阿克苏","2025.6",41.1688,80.2651],["中国","新疆","喀什","2025.6",39.4704,75.9898],["日本","兵库县","神户","2025.6",34.6901,135.1955],["日本","广岛县","广岛","2025.6",34.3853,132.4553],["中国","浙江","绍兴","2025.10",30.0303,120.5802],["中国","四川","甘孜","2025.10",31.6198,100.0],["中国","四川","阿坝","2025.10",31.8994,102.2214],["中国","山东","青岛","2025.11",36.0671,120.3826],["中国","浙江","宁波","2025.11",29.8683,121.5440],["日本","神奈川县","横滨","2025.11",35.4437,139.6380],["日本","神奈川县","箱根","2025.11",35.2324,139.1069],["中国","江苏","镇江","2025.11",32.2044,119.4528],["中国","江苏","扬州","2025.12",32.3932,119.4210],["中国","浙江","温州","2026.1",27.9949,120.6994],["中国","浙江","台州","2026.3",28.6564,121.4208],["中国","山西","大同","2026.4",40.0768,113.3001],["中国","辽宁","大连","2026.5",38.9140,121.6147],["中国","辽宁","沈阳","2026.5",41.8057,123.4315]
+];
+
+const map = L.map('map', { zoomControl: false }).setView([31,112],4);
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+}).addTo(map);
+const timeline = document.getElementById('timeline');
+const bounds = [];
+const displayDate = (date) => date === '-' ? '未记录' : date;
+const parseTripTime = (date) => {
+  if (!/^\d{4}/.test(date)) return null;
+  const [year, month = '1'] = date.split('.');
+  return Number(year) * 12 + Number(month);
+};
+const tripTimes = trips.map(([, , , date]) => parseTripTime(date)).filter(Boolean);
+const minTripTime = Math.min(...tripTimes);
+const maxTripTime = Math.max(...tripTimes);
+const markerColor = (date) => {
+  const time = parseTripTime(date);
+  if (!time) return '#b7d8c8';
+  const ratio = (time - minTripTime) / Math.max(maxTripTime - minTripTime, 1);
+  const lightness = 78 - ratio * 43;
+  return `hsl(158 58% ${lightness}%)`;
+};
+trips.forEach((t,i)=>{
+  const [country,province,city,date,lat,lng]=t;
+  const shownDate = displayDate(date);
+  const marker = L.marker([lat,lng], {
+    icon: L.divIcon({
+      className: '',
+      html: `<span class="travel-marker" style="--marker-color:${markerColor(date)}"><span class="dot"></span><span class="label"><span class="city-label">${city}</span><span class="date-label">${shownDate}</span></span></span>`,
+      iconSize: [92, 34],
+      iconAnchor: [7, 17],
+      popupAnchor: [0, -16]
+    })
+  }).addTo(map).bindPopup(`<b>${city}</b><br>${country} / ${province}<br>去过时间：${shownDate}`);
+  bounds.push([lat,lng]);
+  const li=document.createElement('li');
+  li.innerHTML=`<div class="date">${shownDate}</div><div class="city">${i+1}. ${city}</div><div class="meta">${country} · ${province}</div>`;
+  li.onclick=()=>{map.flyTo([lat,lng],7,{duration:1.1});marker.openPopup();};
+  timeline.appendChild(li);
+});
+map.fitBounds(bounds,{padding:[30,30]});
+</script>
+</body>
+</html>
